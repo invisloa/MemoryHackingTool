@@ -13,26 +13,40 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <!-- Top Panel with controls -->
         <StackPanel Orientation="Horizontal" Margin="10">
-            <TextBox x:Name="ProcessNameTextBox" Width="200" Margin="5" />
-            <Button x:Name="ScanButton" Content="Start Scan" Width="100" Margin="5" Click="ScanButton_Click"/>
-            <Button x:Name="SubScanButton" Content="Subscan" Width="100" Margin="5" Click="SubScanButton_Click"/>
-            <ComboBox x:Name="ValueTypeComboBox" Width="100" Margin="5">
-                <ComboBoxItem Content="Byte" IsSelected="True"/>
+            <!-- Bind ProcessNameTextBox to ProcessName property in ViewModel -->
+            <TextBox x:Name="ProcessNameTextBox" Text="{Binding ProcessName, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="5" />
+
+            <!-- Bind Scan Button to ScanCommand in ViewModel -->
+            <Button Content="Start Scan" Command="{Binding ScanCommand}" Width="100" Margin="5"/>
+
+            <!-- Bind SubScan Button to a SubScanCommand (placeholder) in ViewModel -->
+            <Button Content="Subscan" Width="100" Margin="5" Command="{Binding SubScanCommand}"/>
+
+            <!-- Bind ComboBox to ValueType in ViewModel (property would be an Enum or string) -->
+            <ComboBox x:Name="ValueTypeComboBox" SelectedItem="{Binding SelectedValueType, UpdateSourceTrigger=PropertyChanged}" Width="100" Margin="5">
+                <ComboBoxItem Content="Byte"/>
                 <ComboBoxItem Content="Short"/>
                 <ComboBoxItem Content="Long"/>
             </ComboBox>
-            <TextBox x:Name="ValueTextBox" Width="100" Margin="5" />
+
+            <!-- Bind ValueTextBox to ValueToFindText property in ViewModel -->
+            <TextBox Text="{Binding ValueToFindText, UpdateSourceTrigger=PropertyChanged}" Width="100" Margin="5" />
         </StackPanel>
 
-        <ListBox x:Name="CriteriaListBox" Grid.Row="1" Margin="10" Height="100">
+        <!-- Criteria ListBox -->
+        <ListBox x:Name="CriteriaListBox" Grid.Row="1" Margin="10" Height="100"
+                 SelectedItem="{Binding SelectedCriteria, UpdateSourceTrigger=PropertyChanged}">
             <ListBoxItem Content="Increased"/>
             <ListBoxItem Content="Decreased"/>
             <ListBoxItem Content="Same as Before"/>
             <ListBoxItem Content="Same as Original"/>
         </ListBox>
 
-        <DataGrid x:Name="ResultsDataGrid" Grid.Row="2" Margin="10" AutoGenerateColumns="False">
+        <!-- DataGrid to display results -->
+        <DataGrid x:Name="ResultsDataGrid" Grid.Row="2" Margin="10" AutoGenerateColumns="False" 
+                  ItemsSource="{Binding MatchingBytes}">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="*" />
                 <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*" />
