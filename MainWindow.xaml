@@ -3,9 +3,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:MemoryHackingTool"
+        xmlns:local="clr-namespace:MemoryHackingTool.ViewModels"
         mc:Ignorable="d"
         Title="Memory Scanner" Height="450" Width="800">
+    <Window.DataContext>
+        <local:MainViewModel/>
+        <!-- Set the DataContext to MainViewModel -->
+    </Window.DataContext>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -13,29 +17,19 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Top Panel with controls -->
         <StackPanel Orientation="Horizontal" Margin="10">
-            <!-- Bind ProcessNameTextBox to ProcessName property in ViewModel -->
-            <TextBox x:Name="ProcessNameTextBox" Text="{Binding ProcessName, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="5" />
-
-            <!-- Bind Scan Button to ScanCommand in ViewModel -->
-            <Button Content="Start Scan" Command="{Binding ScanCommand}" Width="100" Margin="5"/>
-
-            <!-- Bind SubScan Button to a SubScanCommand (placeholder) in ViewModel -->
+            <TextBox Text="{Binding ProcessName, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="5" />
+            <Button Content="Start Scan" Width="100" Margin="5" Command="{Binding ScanCommand}"/>
             <Button Content="Subscan" Width="100" Margin="5" Command="{Binding SubScanCommand}"/>
-
-            <!-- Bind ComboBox to ValueType in ViewModel (property would be an Enum or string) -->
-            <ComboBox x:Name="ValueTypeComboBox" SelectedItem="{Binding SelectedValueType, UpdateSourceTrigger=PropertyChanged}" Width="100" Margin="5">
-                <ComboBoxItem Content="Byte"/>
+            <ComboBox Width="100" Margin="5" SelectedItem="{Binding SelectedCriteria, UpdateSourceTrigger=PropertyChanged}">
+                <ComboBoxItem Content="Byte" />
                 <ComboBoxItem Content="Short"/>
                 <ComboBoxItem Content="Long"/>
             </ComboBox>
-
-            <!-- Bind ValueTextBox to ValueToFindText property in ViewModel -->
             <TextBox Text="{Binding ValueToFindText, UpdateSourceTrigger=PropertyChanged}" Width="100" Margin="5" />
+            <CheckBox Content="Save first scan" IsChecked="{Binding IsLocking, Mode=TwoWay}" />
         </StackPanel>
 
-        <!-- Criteria ListBox -->
         <ListBox x:Name="CriteriaListBox" Grid.Row="1" Margin="10" Height="100"
                  SelectedItem="{Binding SelectedCriteria, UpdateSourceTrigger=PropertyChanged}">
             <ListBoxItem Content="Increased"/>
@@ -44,9 +38,7 @@
             <ListBoxItem Content="Same as Original"/>
         </ListBox>
 
-        <!-- DataGrid to display results -->
-        <DataGrid x:Name="ResultsDataGrid" Grid.Row="2" Margin="10" AutoGenerateColumns="False" 
-                  ItemsSource="{Binding MatchingBytes}">
+        <DataGrid Grid.Row="2" Margin="10" AutoGenerateColumns="False" ItemsSource="{Binding FilteredResoult}">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="*" />
                 <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*" />

@@ -1,4 +1,5 @@
-﻿using GalaSoft.MvvmLight.Command;
+﻿using GalaSoft.MvvmLight;
+using GalaSoft.MvvmLight.Command;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -38,173 +39,180 @@ namespace MemoryHackingTool.ViewModels
         [DllImport("kernel32.dll")]
         private static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, UIntPtr dwSize, out IntPtr lpNumberOfBytesRead);
 
-        private List<(IntPtr Address, byte Value)> matchingBytes = new List<(IntPtr Address, byte Value)>();
-        private List<(IntPtr Address, byte Value)> previousMatchingBytes = new List<(IntPtr Address, byte Value)>();
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out IntPtr lpNumberOfBytesWritten);
 
-        private string processName;
+        private List<(IntPtr Address, byte Value)> matchingBytes = new List<(IntPtr Address, byte Value)>();
+        private List<(IntPtr Address, byte Value)> _filteredResoult = new List<(IntPtr Address, byte Value)>();
+        private List<(IntPtr Address, byte Value)> _lastScanResoult = new List<(IntPtr Address, byte Value)>();
+
+        public List<(IntPtr Address, byte Value)> FilteredResoult
+        {
+            get => _filteredResoult;
+            set
+            {
+                _filteredResoult = value;
+                OnPropertyChanged();
+            }
+        }
+        
+
+        private string processName = "ares";
+        private Process process;
+        private IntPtr hProcess; // Store the process handle here
+
         public string ProcessName
         {
             get => processName;
-            set => SetProperty(ref processName, value);
+            set
+            {
+                processName = value;
+                OnPropertyChanged();
+                InitializeProcess(); // Initialize process whenever the name changes
+            }
         }
 
         private string valueToFindText;
         public string ValueToFindText
         {
             get => valueToFindText;
-            set => SetProperty(ref valueToFindText, value);
+            set
+            {
+                valueToFindText = value;
+                OnPropertyChanged();
+            }
         }
 
         private string selectedCriteria;
         public string SelectedCriteria
         {
             get => selectedCriteria;
-            set => SetProperty(ref selectedCriteria, value);
-        }
-
-        private ICommand scanCommand;
-        public ICommand ScanCommand
-        {
-            get
+            set
             {
-                if (scanCommand == null)
-                {
-                    scanCommand = new RelayCommand(async () => await InitialScanAsync());
-                }
-                return scanCommand;
+                selectedCriteria = value;
+                OnPropertyChanged();
             }
         }
 
-        private ICommand subScanCommand;
-        public ICommand SubScanCommand
+        private bool isLocking;
+        public bool IsLocking
         {
-            get
+            get => isLocking;
+            set
             {
-                if (subScanCommand == null)
-                {
-                    subScanCommand = new RelayCommand(async () => await SubScanMemoryAsync());
-                }
-                return subScanCommand;
+                isLocking = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public ICommand ScanCommand { get; }
+        public ICommand SubScanCommand { get; }
+        public ICommand LockAddressValueCommand { get; }
+        public ICommand StopLockingCommand { get; }
+
+        public MainViewModel()
+        {
+            ScanCommand = new RelayCommand(async () => await InitialScanAsync());
+            SubScanCommand = new RelayCommand(async () => await SubScanMemoryAsync());
+            LockAddressValueCommand = new RelayCommand(async () => await LockAddressValueAsync());
+            StopLockingCommand = new RelayCommand(StopLocking);
+        }
+
+        private void InitializeProcess()
+        {
+            if (process != null)
+            {
+                CloseHandle(hProcess); // Close the previous handle if it exists
+                process = null;
+                hProcess = IntPtr.Zero;
+            }
+
+            Process[] processes = Process.GetProcessesByName(ProcessName);
+            if (processes.Length == 0)
+            {
+                MessageBox.Show($"Process '{ProcessName}' not found.");
+                return;
+            }
+
+            process = processes[0];
+            hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | 0x0020, false, process.Id);
+            if (hProcess == IntPtr.Zero)
+            {
+                MessageBox.Show("Failed to open process. Try running the application as administrator.");
             }
         }
 
         private async Task InitialScanAsync()
         {
-            Process[] processes = Process.GetProcessesByName(ProcessName);
-            if (processes.Length == 0)
-            {
-                MessageBox.Show($"Process '{ProcessName}' not found.");
-                return;
-            }
-
-            Process process = processes[0];
-            IntPtr hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, process.Id);
             if (hProcess == IntPtr.Zero)
             {
-                MessageBox.Show("Failed to open process. Try running the application as administrator.");
+                MessageBox.Show("Process handle is invalid. Check the process name.");
                 return;
             }
 
-            try
-            {
-                matchingBytes.Clear();
-                await Task.Run(() => ScanMemory(hProcess));
-                previousMatchingBytes = new List<(IntPtr Address, byte Value)>(matchingBytes);
-                DisplayResults();
-            }
-            finally
-            {
-                CloseHandle(hProcess);
-            }
+            matchingBytes.Clear();
+            await Task.Run(() => ScanMemory(hProcess));
+            _lastScanResoult = new List<(IntPtr Address, byte Value)>(matchingBytes);
+            DisplayResults();
         }
 
         private async Task SubScanMemoryAsync()
         {
-            if (previousMatchingBytes.Count == 0)
+            if (hProcess == IntPtr.Zero)
+            {
+                MessageBox.Show("Process handle is invalid. Check the process name.");
+                return;
+            }
+
+            if (_lastScanResoult.Count == 0)
             {
                 MessageBox.Show("No previous scan data available.");
                 return;
             }
 
-            Process[] processes = Process.GetProcessesByName(ProcessName);
-            if (processes.Length == 0)
+            matchingBytes.Clear();
+            await Task.Run(() => SubScanMemory(hProcess));
+            DisplayResults();
+        }
+
+        private async Task LockAddressValueAsync()
+        {
+            if (hProcess == IntPtr.Zero)
             {
-                MessageBox.Show($"Process '{ProcessName}' not found.");
+                MessageBox.Show("Process handle is invalid. Check the process name.");
                 return;
             }
 
-            Process process = processes[0];
-            IntPtr hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, process.Id);
-            if (hProcess == IntPtr.Zero)
-            {
-                MessageBox.Show("Failed to open process. Try running the application as administrator.");
-                return;
-            }
+            IsLocking = true;
 
             try
             {
-                matchingBytes.Clear();
-                await Task.Run(() => SubScanMemory(hProcess));
-                DisplayResults();
+                byte[] buffer = new byte[] { byte.Parse(ValueToFindText) };
+                IntPtr bytesWritten;
+
+                while (IsLocking)
+                {
+                    // Write the value to the specified address
+                    bool success = WriteProcessMemory(hProcess, matchingBytes[0].Address, buffer, (uint)buffer.Length, out bytesWritten);
+                    if (!success || bytesWritten.ToInt64() != buffer.Length)
+                    {
+                        MessageBox.Show($"Failed to write to address {matchingBytes[0].Address.ToString("X")}. Error: {Marshal.GetLastWin32Error()}");
+                        break;
+                    }
+
+                    await Task.Delay(100); // Adjust delay as needed
+                }
             }
             finally
             {
-                CloseHandle(hProcess);
+                CloseHandle(hProcess); // Ensure we close the handle to the process
             }
         }
 
-        private void ScanMemory(IntPtr hProcess)
+        private void StopLocking()
         {
-            IntPtr startAddress = new IntPtr(0x00400000);
-            IntPtr endAddress = new IntPtr(0x7FFF0000);
-            IntPtr address = startAddress;
-
-            const int chunkSize = 65536;
-            byte[] buffer = new byte[chunkSize];
-
-            while (address.ToInt64() < endAddress.ToInt64())
-            {
-                MEMORY_BASIC_INFORMATION m;
-                IntPtr result = VirtualQueryEx(hProcess, address, out m, new UIntPtr((uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION))));
-                if (result == IntPtr.Zero)
-                {
-                    break;
-                }
-
-                bool isReadable = (m.State == 0x1000) &&
-                                  ((m.Protect & 0x04) != 0 ||
-                                   (m.Protect & 0x20) != 0 ||
-                                   (m.Protect & 0x02) != 0 ||
-                                   (m.Protect & 0x10) != 0);
-
-                if (isReadable)
-                {
-                    long regionSize = (long)m.RegionSize;
-                    IntPtr regionBase = m.BaseAddress;
-
-                    for (long offset = 0; offset < regionSize; offset += chunkSize)
-                    {
-                        IntPtr currentAddress = new IntPtr(regionBase.ToInt64() + offset);
-
-                        if (regionSize - offset < chunkSize)
-                        {
-                            buffer = new byte[regionSize - offset];
-                        }
-
-                        IntPtr bytesRead;
-                        bool success = ReadProcessMemory(hProcess, currentAddress, buffer, new UIntPtr((uint)buffer.Length), out bytesRead);
-                        if (success && bytesRead.ToInt64() > 0)
-                        {
-                            for (int i = 0; i < bytesRead.ToInt64(); i++)
-                            {
-                                matchingBytes.Add((new IntPtr(currentAddress.ToInt64() + i), buffer[i]));
-                            }
-                        }
-                    }
-                }
-
-                address = new IntPtr(m.BaseAddress.ToInt64() + (long)m.RegionSize);
-            }
+            IsLocking = false; // Stop the locking loop
+            MessageBox.Show("Stopped locking the address value.");
         }
 
         private void SubScanMemory(IntPtr hProcess)
@@ -212,7 +220,7 @@ namespace MemoryHackingTool.ViewModels
             const int chunkSize = 65536;
             byte[] buffer = new byte[chunkSize];
 
-            foreach (var entry in previousMatchingBytes)
+            foreach (var entry in _lastScanResoult)
             {
                 IntPtr currentAddress = entry.Address;
                 IntPtr bytesRead;
@@ -247,12 +255,72 @@ namespace MemoryHackingTool.ViewModels
                 }
             }
 
-            previousMatchingBytes = new List<(IntPtr Address, byte Value)>(matchingBytes);
+            _lastScanResoult = new List<(IntPtr Address, byte Value)>(matchingBytes);
+        }
+
+        private void ScanMemory(IntPtr hProcess)
+        {
+           IntPtr startAddress = new IntPtr(0x00400000);
+            IntPtr endAddress = new IntPtr(0x7FFF0000);
+            IntPtr address = startAddress;
+
+            const int chunkSize = 65536;  // Read 64 KB chunks at a time
+            byte[] buffer = new byte[chunkSize];
+            if (!byte.TryParse(SelectedCriteria, out byte valueToFind))
+
+                while (address.ToInt64() < endAddress.ToInt64())
+            {
+                MEMORY_BASIC_INFORMATION m;
+                IntPtr result = VirtualQueryEx(hProcess, address, out m, new UIntPtr((uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION))));
+                if (result == IntPtr.Zero)
+                {
+                    break;
+                }
+
+                bool isReadable = (m.State == 0x1000) &&
+                                  ((m.Protect & 0x04) != 0 ||
+                                   (m.Protect & 0x20) != 0 ||
+                                   (m.Protect & 0x02) != 0 ||
+                                   (m.Protect & 0x10) != 0);
+
+                if (isReadable)
+                {
+                    long regionSize = (long)m.RegionSize;
+                    IntPtr regionBase = m.BaseAddress;
+
+                    for (long offset = 0; offset < regionSize; offset += chunkSize)
+                    {
+                        IntPtr currentAddress = new IntPtr(regionBase.ToInt64() + offset);
+
+                        int bytesToRead = (int)Math.Min(chunkSize, regionSize - offset);
+                        IntPtr bytesRead;
+                        bool success = ReadProcessMemory(hProcess, currentAddress, buffer, new UIntPtr((uint)bytesToRead), out bytesRead);
+                        if (success && bytesRead.ToInt64() > 0)
+                        {
+                            for (int i = 0; i < bytesRead.ToInt64(); i++)
+                            {
+                                if (buffer[i] == valueToFind)
+                                {
+                                    _lastScanResoult.Add((new IntPtr(currentAddress.ToInt64() + i), buffer[i]));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                address = new IntPtr(m.BaseAddress.ToInt64() + (long)m.RegionSize);
+            }
+            FirstScanHelper.SaveFirstScanResults(_lastScanResoult);
+
         }
 
         private void DisplayResults()
         {
             MessageBox.Show($"Found {matchingBytes.Count} matching values.");
+            if(matchingBytes.Count < 30)
+            {
+                FilteredResoult = matchingBytes; 
+            }
         }
     }
 }
