@@ -11,4 +11,5 @@ namespace MemoryHackingTool.Models
         public string Address { get; set; }
         public byte Value { get; set; }
     }
+
 }

@@ -272,8 +272,10 @@ namespace MemoryHackingTool.ViewModels
 
                     try
                     {
-                        // Convert the address from string to IntPtr assuming it's in hexadecimal format
-                        IntPtr address = new IntPtr(Convert.ToInt64(result.Address, 16));
+                        // Convert the address from "0x..." string to ulong, then to IntPtr
+                        ulong addressValue = Convert.ToUInt64(result.Address.Replace("0x", ""), 16);
+                        IntPtr address = new IntPtr((long)addressValue); // Convert ulong to IntPtr safely
+
                         _memoryLocker.AddAddressToLock(address, lockByte);
                     }
                     catch (FormatException)
@@ -301,10 +303,16 @@ namespace MemoryHackingTool.ViewModels
             if (_lastScanResoult.Count < 30)
             {
                 FilteredResults = _lastScanResoult
-                    .Select(r => new MemoryResult { Address = r.Address.ToString(), Value = r.Value })
+                    .Select(r => new MemoryResult
+                    {
+                        // Convert IntPtr to hexadecimal string for display (with "0x" prefix)
+                        Address = $"0x{r.Address.ToInt64():X}",
+                        Value = r.Value
+                    })
                     .ToList();
             }
         }
+
 
         private void OnUnlockCommand()
         {
