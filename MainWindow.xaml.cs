@@ -8,7 +8,7 @@ namespace MemoryHackingTool
         public MainWindow()
         {
             InitializeComponent();
-            DataContext = new MainViewModel(); // Set the DataContext to MainViewModel
+            DataContext = new MainWindowViewModel(); 
         }
     }
 }

@@ -7,42 +7,45 @@
         mc:Ignorable="d"
         Title="Memory Scanner" Height="450" Width="800">
     <Window.DataContext>
-        <local:MainViewModel/>
+        <local:MainWindowViewModel/>
         <!-- Set the DataContext to MainViewModel -->
     </Window.DataContext>
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-
-        <StackPanel Orientation="Horizontal" Margin="10">
+    <StackPanel Margin="10">
+        <!-- Top section with input controls and buttons -->
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
             <TextBox Text="{Binding ProcessName, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="5" />
-            <Button Content="Start Scan" Width="100" Margin="5" Command="{Binding ScanCommand}"/>
+            <Button Content="Start Scan" Width="100" Margin="5" Command="{Binding StartScanCommand}"/>
             <Button Content="Subscan" Width="100" Margin="5" Command="{Binding SubScanCommand}"/>
             <ComboBox Width="100" Margin="5" SelectedItem="{Binding SelectedCriteria, UpdateSourceTrigger=PropertyChanged}">
                 <ComboBoxItem Content="Byte" />
                 <ComboBoxItem Content="Short"/>
                 <ComboBoxItem Content="Long"/>
             </ComboBox>
-            <TextBox Text="{Binding ValueToFindText, UpdateSourceTrigger=PropertyChanged}" Width="100" Margin="5" />
-            <CheckBox Content="Save first scan" IsChecked="{Binding IsLocking, Mode=TwoWay}" />
+            <TextBox Text="{Binding ValueToFind, UpdateSourceTrigger=PropertyChanged}" Width="100" Margin="5" />
+            <CheckBox Content="EnableSameAsOriginal" IsChecked="{Binding EnableSameAsOriginal, Mode=TwoWay}" />
         </StackPanel>
 
-        <ListBox x:Name="CriteriaListBox" Grid.Row="1" Margin="10" Height="100"
+        <!-- Criteria ListBox -->
+        <ListBox x:Name="CriteriaListBox" Margin="0,0,0,10" Height="100"
                  SelectedItem="{Binding SelectedCriteria, UpdateSourceTrigger=PropertyChanged}">
             <ListBoxItem Content="Increased"/>
             <ListBoxItem Content="Decreased"/>
             <ListBoxItem Content="Same as Before"/>
             <ListBoxItem Content="Same as Original"/>
         </ListBox>
+        <StackPanel Orientation="Horizontal">
+        <Button Content="Lock" Width="100" Margin="5" Command="{Binding LockCommand}"/>
+        <Button Content="Unlock" Width="100" Margin="5" Command="{Binding UnlockCommand}"/>
+            <TextBox Text="{Binding ValueToLock, Mode=TwoWay}" Width="150"/>
+        </StackPanel>
 
-        <DataGrid Grid.Row="2" Margin="10" AutoGenerateColumns="False" ItemsSource="{Binding FilteredResoult}">
+        <!-- DataGrid -->
+        <DataGrid Margin="0,0,0,10" AutoGenerateColumns="False" ItemsSource="{Binding FilteredResults}">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="*" />
                 <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*" />
+
             </DataGrid.Columns>
         </DataGrid>
-    </Grid>
+    </StackPanel>
 </Window>

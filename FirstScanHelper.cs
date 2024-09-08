@@ -19,6 +19,7 @@ namespace MemoryHackingTool
         /// <param name="matchingBytes">List of addresses and values from the first scan.</param>
         public static void SaveFirstScanResults(List<(IntPtr Address, byte Value)> matchingBytes)
         {
+
             using (StreamWriter writer = new StreamWriter(FirstScanFilePath))
             {
                 foreach (var (address, value) in matchingBytes)
@@ -26,8 +27,6 @@ namespace MemoryHackingTool
                     writer.WriteLine($"{address.ToInt64().ToString("X")},{value}");
                 }
             }
-
-            MessageBox.Show("First scan results saved successfully.");
         }
 
         /// <summary>
