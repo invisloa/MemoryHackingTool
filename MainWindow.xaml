@@ -8,7 +8,6 @@
         Title="Memory Scanner" Height="450" Width="800">
     <Window.DataContext>
         <local:MainWindowViewModel/>
-        <!-- Set the DataContext to MainViewModel -->
     </Window.DataContext>
     <StackPanel Margin="10">
         <!-- Top section with input controls and buttons -->
@@ -16,35 +15,36 @@
             <TextBox Text="{Binding ProcessName, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="5" />
             <Button Content="Start Scan" Width="100" Margin="5" Command="{Binding StartScanCommand}"/>
             <Button Content="Subscan" Width="100" Margin="5" Command="{Binding SubScanCommand}"/>
-            <ComboBox Width="100" Margin="5" SelectedItem="{Binding SelectedCriteria, UpdateSourceTrigger=PropertyChanged}">
+            <ComboBox Width="100" Margin="5" SelectedItem="{Binding SelectedDataType, UpdateSourceTrigger=PropertyChanged}">
                 <ComboBoxItem Content="Byte" />
                 <ComboBoxItem Content="Short"/>
                 <ComboBoxItem Content="Long"/>
             </ComboBox>
             <TextBox Text="{Binding ValueToFind, UpdateSourceTrigger=PropertyChanged}" Width="100" Margin="5" />
-            <CheckBox Content="EnableSameAsOriginal" IsChecked="{Binding EnableSameAsOriginal, Mode=TwoWay}" />
+            <CheckBox Content="Enable Same As Original" IsChecked="{Binding EnableSameAsOriginal, Mode=TwoWay}" />
         </StackPanel>
 
         <!-- Criteria ListBox -->
-        <ListBox x:Name="CriteriaListBox" Margin="0,0,0,10" Height="100"
-                 SelectedItem="{Binding SelectedCriteria, UpdateSourceTrigger=PropertyChanged}">
-            <ListBoxItem Content="Increased"/>
-            <ListBoxItem Content="Decreased"/>
-            <ListBoxItem Content="Same as Before"/>
-            <ListBoxItem Content="Same as Original"/>
-        </ListBox>
+        <ComboBox Width="100" Margin="5" 
+                                   SelectedItem="{Binding SelectedCriteria, UpdateSourceTrigger=PropertyChanged}">
+            <ComboBoxItem Content="Exact Value" />
+            <ComboBoxItem Content="Increased"/>
+            <ComboBoxItem Content="Decreased"/>
+            <ComboBoxItem Content="Same as Before"/>
+            <ComboBoxItem Content="Same as Original"/>
+        </ComboBox>
+        <!-- Lock/Unlock Buttons -->
         <StackPanel Orientation="Horizontal">
-        <Button Content="Lock" Width="100" Margin="5" Command="{Binding LockCommand}"/>
-        <Button Content="Unlock" Width="100" Margin="5" Command="{Binding UnlockCommand}"/>
+            <Button Content="Lock" Width="100" Margin="5" Command="{Binding LockCommand}"/>
+            <Button Content="Unlock" Width="100" Margin="5" Command="{Binding UnlockCommand}"/>
             <TextBox Text="{Binding ValueToLock, Mode=TwoWay}" Width="150"/>
         </StackPanel>
 
         <!-- DataGrid -->
-        <DataGrid Margin="0,0,0,10" AutoGenerateColumns="False" ItemsSource="{Binding FilteredResults}">
+        <DataGrid Margin="0,0,0,10" AutoGenerateColumns="False" ItemsSource="{Binding FilteredResults}" SelectedItem="{Binding SelectedResoultItem}">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="*" />
                 <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*" />
-
             </DataGrid.Columns>
         </DataGrid>
     </StackPanel>

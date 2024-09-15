@@ -1,5 +1,6 @@
 ﻿using GalaSoft.MvvmLight.Command;
 using MemoryHackingTool.MemmoryHelpers;
+using MemoryHackingTool.MemmoryHelpers.MemmoryHelpers;
 using MemoryHackingTool.Models;
 using System;
 using System.Collections.Generic;
@@ -12,54 +13,33 @@ using System.Windows;
 
 namespace MemoryHackingTool.ViewModels
 {
-    internal class MainWindowViewModel: ViewModelBase
+    internal class MainWindowViewModel : ViewModelBase
     {
-        //ctor  
-        public MainWindowViewModel()
-        {
-            StartScanCommand = new RelayCommand(OnStartScanCommand);
-            SubScanCommand = new RelayCommand(OnSubScanCommand);
-            LockCommand = new RelayCommand(OnLockCommand);
-            UnlockCommand = new RelayCommand(OnUnlockCommand);
-        }
-
-        private MemoryLocker _memoryLocker;
-
-        private IntPtr _hProcess;
-        Process _selectedProcess;
-        const int PROCESS_QUERY_INFORMATION = 0x0400;
-        const int PROCESS_VM_READ = 0x0010;
+        // Fields
         private string _processName = "ares";
         private string _valueToFind;
         private bool _enableSameAsOriginal;
         private string _valueToLock;
-        public string ValueToLock
+        private Process _selectedProcess;
+        private List<MemoryResult> _filteredResults = new List<MemoryResult>();
+        private MemorySearcher _memorySearcher;
+        private MemoryLockHandler _memoryLockHandler;
+
+        // Properties
+        public MemoryResult SelectedResoultItem { get; set; }
+
+        private string _selectedCriteria;
+
+        public string SelectedCriteria
         {
-            get => _valueToLock;
+            get => _selectedCriteria;
             set
             {
-                _valueToLock = value;
+                _selectedCriteria = value;
                 OnPropertyChanged();
             }
         }
-        public bool EnableSameAsOriginal
-        {
-            get => _enableSameAsOriginal;
-            set
-            {
-                _enableSameAsOriginal = value;
-                OnPropertyChanged();
-            }
-        }
-        public string ValueToFind
-        {
-            get => _valueToFind;
-            set
-            {
-                _valueToFind = value;
-                OnPropertyChanged();
-            }
-        }
+
         public string ProcessName
         {
             get => _processName;
@@ -70,34 +50,36 @@ namespace MemoryHackingTool.ViewModels
             }
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        public struct MEMORY_BASIC_INFORMATION
+        public string ValueToFind
         {
-            public IntPtr BaseAddress;
-            public IntPtr AllocationBase;
-            public uint AllocationProtect;
-            public UIntPtr RegionSize;
-            public uint State;
-            public uint Protect;
-            public uint Type;
+            get => _valueToFind;
+            set
+            {
+                _valueToFind = value;
+                OnPropertyChanged();
+            }
         }
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out IntPtr lpNumberOfBytesWritten);
 
-        [DllImport("kernel32.dll")]
-        static extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+        public bool EnableSameAsOriginal
+        {
+            get => _enableSameAsOriginal;
+            set
+            {
+                _enableSameAsOriginal = value;
+                OnPropertyChanged();
+            }
+        }
 
-        [DllImport("kernel32.dll")]
-        static extern bool CloseHandle(IntPtr hObject);
+        public string ValueToLock
+        {
+            get => _valueToLock;
+            set
+            {
+                _valueToLock = value;
+                OnPropertyChanged();
+            }
+        }
 
-        [DllImport("kernel32.dll")]
-        static extern IntPtr VirtualQueryEx(IntPtr hProcess, IntPtr lpAddress, out MEMORY_BASIC_INFORMATION lpBuffer, UIntPtr dwLength);
-
-        [DllImport("kernel32.dll")]
-        static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, UIntPtr dwSize, out IntPtr lpNumberOfBytesRead);
-
-        private List<(IntPtr Address, byte Value)> _lastScanResoult = new List<(IntPtr Address, byte Value)>();
-        private List<MemoryResult> _filteredResults = new List<MemoryResult>();
         public List<MemoryResult> FilteredResults
         {
             get => _filteredResults;
@@ -108,15 +90,25 @@ namespace MemoryHackingTool.ViewModels
             }
         }
 
-
+        // Commands
         public RelayCommand StartScanCommand { get; set; }
         public RelayCommand SubScanCommand { get; set; }
         public RelayCommand LockCommand { get; set; }
         public RelayCommand UnlockCommand { get; set; }
 
+        // Constructor
+        public MainWindowViewModel()
+        {
+            _memorySearcher = new MemorySearcher();
+            StartScanCommand = new RelayCommand(OnStartScanCommand);
+            SubScanCommand = new RelayCommand(OnSubScanCommand);
+            LockCommand = new RelayCommand(OnLockCommand);
+            UnlockCommand = new RelayCommand(OnUnlockCommand);
+        }
+
+        // Methods
         private async void OnStartScanCommand()
         {
-            
             if (string.IsNullOrEmpty(ProcessName))
             {
                 MessageBox.Show("Please enter a process name.");
@@ -131,15 +123,7 @@ namespace MemoryHackingTool.ViewModels
             }
 
             _selectedProcess = processes[0];
-            _hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, _selectedProcess.Id);
-            if (_hProcess == IntPtr.Zero)
-            {
-                MessageBox.Show("Failed to open process. Try running the application as administrator.");
-                return;
-            }
 
-
-            // Capture the value to find before starting the task
             if (!byte.TryParse(ValueToFind, out byte valueToFind))
             {
                 MessageBox.Show("Invalid value. Please enter a valid byte value.");
@@ -148,55 +132,57 @@ namespace MemoryHackingTool.ViewModels
 
             try
             {
-                await Task.Run(() => ScanMemory(_hProcess, valueToFind));
-                DisplayResults();
+                var results = await _memorySearcher.StartScanAsync(_selectedProcess, valueToFind, EnableSameAsOriginal);
+                DisplayResults(results);
+                _memoryLockHandler = new MemoryLockHandler(_selectedProcess.Id);
+
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message);
             }
         }
+
         private void OnSubScanCommand()
         {
-            if (_lastScanResoult.Count == 0)
-            {
-                MessageBox.Show("No previous scan results to filter.");
-                return;
-            }
-
             if (!byte.TryParse(ValueToFind, out byte valueToFind))
             {
                 MessageBox.Show("Invalid value. Please enter a valid byte value.");
                 return;
             }
 
+            if (string.IsNullOrEmpty(SelectedCriteria))
+            {
+                MessageBox.Show("Please select a criteria for subscan.");
+                return;
+            }
+
             try
             {
-                // Filter the last scan results by reading the current memory value at each address
-                var filteredResults = new List<(IntPtr Address, byte Value)>();
-
-                foreach (var result in _lastScanResoult)
+                List<(IntPtr Address, byte Value)> filteredResults = null;
+                switch (SelectedCriteria)
                 {
-                    byte[] buffer = new byte[1];
-                    IntPtr bytesRead;
-
-                    // Read the current memory value at the specified address
-                    bool success = ReadProcessMemory(_hProcess, result.Address, buffer, new UIntPtr(1), out bytesRead);
-                    if (success && bytesRead.ToInt64() > 0)
-                    {
-                        // Compare the current value with the user-specified value
-                        if (buffer[0] == valueToFind)
-                        {
-                            filteredResults.Add((result.Address, buffer[0]));
-                        }
-                    }
+                    case "System.Windows.Controls.ComboBoxItem: Exact Value":
+                        filteredResults = _memorySearcher.FilterResults(valueToFind, MemoryCriteria.Exact);
+                        break;
+                    case "System.Windows.Controls.ComboBoxItem: Increased":
+                        filteredResults = _memorySearcher.FilterResults(valueToFind, MemoryCriteria.Increased);
+                        break;
+                    case "System.Windows.Controls.ComboBoxItem: Decreased":
+                        filteredResults = _memorySearcher.FilterResults(valueToFind, MemoryCriteria.Decreased);
+                        break;
+                    case "System.Windows.Controls.ComboBoxItem: Same as Before":
+                        filteredResults = _memorySearcher.FilterResults(valueToFind, MemoryCriteria.SameAsBefore);
+                        break;
+                    case "System.Windows.Controls.ComboBoxItem: Same as Original":
+                        filteredResults = _memorySearcher.FilterResults(valueToFind, MemoryCriteria.SameAsOriginal);
+                        break;
+                    default:
+                        MessageBox.Show("Invalid criteria selected.");
+                        return;
                 }
 
-                // Update the last scan result list to the filtered results
-                _lastScanResoult = filteredResults;
-
-                // Display the filtered results
-                DisplayResults();
+                DisplayResults(filteredResults);
             }
             catch (Exception ex)
             {
@@ -204,92 +190,11 @@ namespace MemoryHackingTool.ViewModels
             }
         }
 
-        private void ScanMemory(IntPtr hProcess, byte valueToFind)
-        {
-            IntPtr startAddress = new IntPtr(0x00400000);
-            IntPtr endAddress = new IntPtr(0x7FFF0000);
-            IntPtr address = startAddress;
-
-            const int chunkSize = 65536;  // Read 64 KB chunks at a time
-            byte[] buffer = new byte[chunkSize];
-
-            while (address.ToInt64() < endAddress.ToInt64())
-            {
-                MEMORY_BASIC_INFORMATION m;
-                IntPtr result = VirtualQueryEx(hProcess, address, out m, new UIntPtr((uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION))));
-                if (result == IntPtr.Zero)
-                {
-                    break;
-                }
-
-                bool isReadable = (m.State == 0x1000) &&
-                                  ((m.Protect & 0x04) != 0 ||
-                                   (m.Protect & 0x20) != 0 ||
-                                   (m.Protect & 0x02) != 0 ||
-                                   (m.Protect & 0x10) != 0);
-
-                if (isReadable)
-                {
-                    long regionSize = (long)m.RegionSize;
-                    IntPtr regionBase = m.BaseAddress;
-
-                    for (long offset = 0; offset < regionSize; offset += chunkSize)
-                    {
-                        IntPtr currentAddress = new IntPtr(regionBase.ToInt64() + offset);
-
-                        int bytesToRead = (int)Math.Min(chunkSize, regionSize - offset);
-                        IntPtr bytesRead;
-                        bool success = ReadProcessMemory(hProcess, currentAddress, buffer, new UIntPtr((uint)bytesToRead), out bytesRead);
-                        if (success && bytesRead.ToInt64() > 0)
-                        {
-                            for (int i = 0; i < bytesRead.ToInt64(); i++)
-                            {
-                                if (buffer[i] == valueToFind)
-                                {
-                                    _lastScanResoult.Add((new IntPtr(currentAddress.ToInt64() + i), buffer[i]));
-                                }
-                            }
-                        }
-                    }
-                }
-
-                address = new IntPtr(m.BaseAddress.ToInt64() + (long)m.RegionSize);
-            }
-            if (EnableSameAsOriginal)
-            {
-                FirstScanHelper.SaveFirstScanResults(_lastScanResoult);
-            }
-        }
         private void OnLockCommand()
         {
             try
             {
-                _memoryLocker = new MemoryLocker(_selectedProcess.Id);
-
-                foreach (var result in _filteredResults)
-                {
-                    byte.TryParse(ValueToLock, out byte lockByte);
-
-                    try
-                    {
-                        // Convert the address from "0x..." string to ulong, then to IntPtr
-                        ulong addressValue = Convert.ToUInt64(result.Address.Replace("0x", ""), 16);
-                        IntPtr address = new IntPtr((long)addressValue); // Convert ulong to IntPtr safely
-
-                        _memoryLocker.AddAddressToLock(address, lockByte);
-                    }
-                    catch (FormatException)
-                    {
-                        MessageBox.Show($"Invalid address format: {result.Address}");
-                    }
-                    catch (OverflowException)
-                    {
-                        MessageBox.Show($"Address value is too large: {result.Address}");
-                    }
-                }
-
-                _memoryLocker.StartLocking();
-                MessageBox.Show("Addresses are now locked to the specified value.");
+                _memoryLockHandler.LockAddresses(_filteredResults, ValueToLock);
             }
             catch (Exception ex)
             {
@@ -297,15 +202,18 @@ namespace MemoryHackingTool.ViewModels
             }
         }
 
-
-        private void ShowResoults()
+        private void OnUnlockCommand()
         {
-            if (_lastScanResoult.Count < 30)
+            _memoryLockHandler?.UnlockAddresses();
+        }
+
+        private void ShowResults(List<(IntPtr Address, byte Value)> results)
+        {
+            if (results.Count < 30)
             {
-                FilteredResults = _lastScanResoult
+                FilteredResults = results
                     .Select(r => new MemoryResult
                     {
-                        // Convert IntPtr to hexadecimal string for display (with "0x" prefix)
                         Address = $"0x{r.Address.ToInt64():X}",
                         Value = r.Value
                     })
@@ -313,16 +221,10 @@ namespace MemoryHackingTool.ViewModels
             }
         }
 
-
-        private void OnUnlockCommand()
+        private void DisplayResults(List<(IntPtr Address, byte Value)> results)
         {
-            _memoryLocker?.StopLocking();
-            MessageBox.Show("Locking stopped.");
-        }
-        private void DisplayResults()
-        {
-            MessageBox.Show($"Found {_lastScanResoult.Count} matching bytes.");
-            ShowResoults();
+            MessageBox.Show($"Found {results.Count} matching bytes.");
+            ShowResults(results);
         }
     }
 }

@@ -38,8 +38,12 @@ namespace MemoryHackingTool.MemmoryHelpers
         {
             _addressesToLock.Add((address, value));
         }
+        public void ClearAddressToLoack()
+        {
+            _addressesToLock.Clear();
+        }
 
-        public void StartLocking()
+        public async Task StartLocking()
         {
             if (_addressesToLock.Count == 0)
             {
@@ -59,7 +63,7 @@ namespace MemoryHackingTool.MemmoryHelpers
                         WriteProcessMemory(_hProcess, address, buffer, 1, out _);
                     }
 
-                    Thread.Sleep(100); // Adjust the interval as needed
+                    Thread.Sleep(1); // Adjust the interval as needed
                 }
             }, token);
         }

@@ -73,6 +73,9 @@
     </ApplicationDefinition>
     <Compile Include="FirstScanHelper.cs" />
     <Compile Include="MemmoryHelpers\MemmoryLocker.cs" />
+    <Compile Include="MemmoryHelpers\MemoryLockHandler.cs" />
+    <Compile Include="MemmoryHelpers\MemorySearcher.cs" />
+    <Compile Include="MemmoryHelpers\MEMORY_BASIC_INFORMATION.cs" />
     <Compile Include="Models\MemoryResult.cs" />
     <Compile Include="ViewModels\MainWindowViewModel.cs" />
     <Compile Include="ViewModels\ViewModelBase.cs" />
